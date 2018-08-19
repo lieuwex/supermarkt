@@ -10,6 +10,7 @@ import (
 	"supermarkt/supermarkts"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html"
 )
 
 type Jumbo struct{}
@@ -48,7 +49,7 @@ func parseSIPrice(str string) (price float32, unit supermarkts.SIUnit, ok bool) 
 	return float32(priceEuros), unit, true
 }
 
-func (Jumbo) getPage(n int) ([]supermarkts.Product, error) {
+func getPage(n int) ([]supermarkts.Product, error) {
 	url := fmt.Sprintf("https://www.jumbo.com/producten?PageNumber=%d", n)
 	res, err := http.Get(url)
 	if err != nil {
@@ -61,60 +62,66 @@ func (Jumbo) getPage(n int) ([]supermarkts.Product, error) {
 		return []supermarkts.Product{}, err
 	}
 
+	nodes := doc.Find(".jum-item-product").Nodes
 	var products []supermarkts.Product
-	doc.Find(".jum-item-product").Each(func(n int, s *goquery.Selection) {
-		val, ok := s.Attr("data-jum-product-impression")
-		if !ok {
-			return
+	for _, node := range nodes {
+		s := goquery.Selection{
+			Nodes: []*html.Node{node},
 		}
 
+		val, ok := s.Attr("data-jum-product-impression")
+		if !ok {
+			continue
+		}
 		var m map[string]interface{}
 		if err := json.Unmarshal([]byte(val), &m); err != nil {
-			return
+			continue
 		}
+		id := m["id"].(string)
 
 		brand, ok := s.Attr("data-jum-brand")
 		if !ok {
-			return
+			continue
 		}
 
-		priceElem := s.Find("#PriceInCents_" + m["id"].(string)).First()
+		priceElem := s.Find("#PriceInCents_" + id).First()
 		if priceElem == nil {
-			return
+			continue
 		}
 		centsStr, ok := priceElem.Attr("value")
 		if !ok {
-			return
+			continue
 		}
 		cents, err := strconv.Atoi(centsStr)
 		if err != nil {
-			return
+			continue
 		}
 
-		price, unit, ok := parseSIPrice(s.Find(".jum-comparative-price").Text())
+		siPrice := s.Find(".jum-comparative-price").Text()
+		pricePerUnit, unit, ok := parseSIPrice(siPrice)
 
 		product := supermarkts.Product{
-			ID:       m["id"].(string),
+			ID:       id,
 			Name:     m["name"].(string),
 			Brand:    brand,
 			Category: m["category"].(string),
 			PriceInfo: supermarkts.PriceInfo{
 				Price:        float32(cents) / 100,
 				Unit:         unit,
-				PricePerUnit: price,
+				PricePerUnit: pricePerUnit,
 			},
 		}
 		products = append(products, product)
-	})
+	}
 
 	return products, nil
 }
 
-func (j Jumbo) Products(limit int) ([]supermarkts.Product, error) {
+func (Jumbo) Products(limit int) ([]supermarkts.Product, error) {
 	var res []supermarkts.Product
 
 	for i := 0; ; i++ {
-		items, err := j.getPage(i)
+		items, err := getPage(i)
 		if err != nil {
 			return []supermarkts.Product{}, err
 		} else if len(items) == 0 {
