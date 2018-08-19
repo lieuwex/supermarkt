@@ -1,23 +1,28 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	_ "supermarkt/jumbo"
+	_ "supermarkt/supermarktaanbiedingen"
 	"supermarkt/supermarkts"
 )
 
 func main() {
-	items, err := supermarkts.ProductsBySupermarket("jumbo", 1000)
+	items, err := supermarkts.ProductsBySupermarket("ah", 10)
 	if err != nil {
 		panic(err)
 	}
+	for _, item := range items {
+		fmt.Print("ah ")
+		fmt.Println(item)
+	}
 
-	for id, items := range items {
-		fmt.Printf("\n----- %s -----\n", id)
-		for _, val := range items {
-			fmt.Println(val)
-		}
+	items, err = supermarkts.ProductsBySupermarket("dirk", 10)
+	if err != nil {
+		panic(err)
+	}
+	for _, item := range items {
+		fmt.Print("dirk ")
+		fmt.Println(item)
 	}
 }

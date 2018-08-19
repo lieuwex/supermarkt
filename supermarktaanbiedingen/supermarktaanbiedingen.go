@@ -2,14 +2,14 @@ package supermarktaanbiedingen
 
 import (
 	"fmt"
-	"net/http"
+	"log"
 	"path"
 	"strconv"
 	"strings"
 	"supermarkt/supermarkts"
-	"sync"
 
-	"github.com/PuerkitoBio/goquery"
+	"github.com/Jeffail/tunny"
+	"github.com/gocolly/colly"
 	"github.com/namsral/microdata"
 )
 
@@ -24,7 +24,32 @@ type Product struct {
 	Offers []Offer
 }
 
+func (p Product) GetOffer(id string) (Offer, bool) {
+	var query string
+
+	switch id {
+	case "ah":
+		query = "Albert Heijn"
+	case "dirk":
+		query = "Dirk"
+	case "hoog":
+		query = "Hoogvliet"
+
+	default:
+		return Offer{}, false
+	}
+
+	for _, offer := range p.Offers {
+		if offer.Supermarket == query {
+			return offer, true
+		}
+	}
+	return Offer{}, false
+}
+
 func getProduct(url string) (Product, error) {
+	log.Printf("handling %s", url)
+
 	data, err := microdata.ParseURL(url)
 	if err != nil {
 		return Product{}, err
@@ -67,83 +92,107 @@ func getProduct(url string) (Product, error) {
 	}, nil
 }
 
+type workerRes struct {
+	Result Product
+	Error  error
+}
+
 func handleResultsPage(n int) ([]Product, bool, error) {
-	url := fmt.Sprintf("http://www.supermarktaanbiedingen.com/zoeken/%%20/pagina/%d", n)
-	resp, err := http.Get(url)
-	if err != nil {
-		return []Product{}, false, err
-	}
-	defer resp.Body.Close()
+	// collect product urls
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return []Product{}, false, err
-	}
-
-	prices := doc.Find(".price, .card_prijs-oud")
-	urlsCh := make(chan string, prices.Length())
-
-	if prices.Length() == 0 {
-		return []Product{}, false, nil
-	}
-
-	prices.Each(func(n int, s *goquery.Selection) {
-		if s.HasClass("card_prijs-oud") {
+	c := colly.NewCollector()
+	var urls []string
+	any := false
+	c.OnHTML(".price, .card_prijs-oud", func(e *colly.HTMLElement) {
+		any = true
+		if e.DOM.HasClass("card_prijs-oud") {
 			return
 		}
 
-		a := s.Parent().Parent().Parent().Parent() // HACK
+		a := e.DOM.ParentsFiltered("a")
 		slug, ok := a.Attr("href")
 		if !ok {
 			return
 		}
 
-		urlsCh <- "http://" + path.Join("www.supermarktaanbiedingen.com/", slug)
+		url := "http://" + path.Join("www.supermarktaanbiedingen.com/", slug)
+		urls = append(urls, url)
 	})
 
-	nURLs := len(urlsCh)
-	var wg sync.WaitGroup
-	wg.Add(nURLs)
-	products := make(chan Product, nURLs)
-
-	for i := 0; i < nURLs; i++ {
-		go func() {
-			url := <-urlsCh
-			product, err := getProduct(url)
-			if err == nil {
-				products <- product
-			}
-			wg.Done()
-		}()
+	url := fmt.Sprintf(
+		"http://www.supermarktaanbiedingen.com/zoeken/%%20/pagina/%d",
+		n,
+	)
+	log.Printf("visiting %s", url)
+	if err := c.Visit(url); err != nil {
+		return []Product{}, false, err
 	}
 
-	wg.Wait()
-	close(urlsCh)
-	close(products)
+	// scrape product pages
 
-	var res []Product
-	for prod := range products {
-		res = append(res, prod)
+	pool := tunny.NewFunc(5, func(url interface{}) interface{} {
+		product, err := getProduct(url.(string))
+		return workerRes{
+			Result: product,
+			Error:  err,
+		}
+	})
+
+	var products []Product
+	for _, url := range urls {
+		res := pool.Process(url).(workerRes)
+		if res.Error != nil {
+			return []Product{}, false, res.Error
+		}
+
+		products = append(products, res.Result)
 	}
-	return res, true, nil
+	return products, any, nil
 }
 
-type AlbertHeijn struct{}
+var cache = make(map[int][]Product)
 
-func (AlbertHeijn) Products(limit int) ([]supermarkts.Product, error) {
+func getPage(i int) ([]Product, bool, error) {
+	products, has := cache[i]
+	if has {
+		log.Printf("%d cache hit", i)
+		return products, true, nil
+	}
+
+	prods, contains, err := handleResultsPage(i)
+	if contains && err == nil {
+		cache[i] = prods
+	}
+	return prods, contains, err
+}
+
+func getProducts(id string, limit int) ([]supermarkts.Product, error) {
 	var res []supermarkts.Product
 
 	for i := 1; ; i++ {
-		prods, contains, err := handleResultsPage(i)
+		prods, contains, err := getPage(i)
 		if err != nil {
 			panic(err)
 		}
 
 		for _, p := range prods {
-			fmt.Printf("%#v\n", p)
+			offer, has := p.GetOffer(id)
+			if !has {
+				continue
+			}
+
+			res = append(res, supermarkts.Product{
+				ID:       "", // TODO
+				Name:     p.Name,
+				Brand:    p.Brand,
+				Category: "", // TODO
+				PriceInfo: supermarkts.PriceInfo{
+					Price: offer.Price,
+				},
+			})
 		}
 
-		if !contains {
+		if !contains || len(res) >= limit {
 			break
 		}
 	}
@@ -151,9 +200,25 @@ func (AlbertHeijn) Products(limit int) ([]supermarkts.Product, error) {
 	return res, nil
 }
 
-func (AlbertHeijn) ID() string   { return "ah" }
-func (AlbertHeijn) Name() string { return "Albert Heijn" }
+type AlbertHeijn struct{}
+
+func (AlbertHeijn) Products(limit int) ([]supermarkts.Product, error) { return getProducts("ah", limit) }
+func (AlbertHeijn) ID() string                                        { return "ah" }
+func (AlbertHeijn) Name() string                                      { return "Albert Heijn" }
+
+type Dirk struct{}
+
+func (Dirk) Products(limit int) ([]supermarkts.Product, error) { return getProducts("dirk", limit) }
+func (Dirk) ID() string                                        { return "dirk" }
+func (Dirk) Name() string                                      { return "Dirk" }
+
+type Hoogvliet struct{}
+
+func (Hoogvliet) Products(limit int) ([]supermarkts.Product, error) { return getProducts("hoog", limit) }
+func (Hoogvliet) ID() string                                        { return "hoog" }
+func (Hoogvliet) Name() string                                      { return "Hoogvliet" }
 
 func init() {
 	supermarkts.Register(&AlbertHeijn{})
+	supermarkts.Register(&Dirk{})
 }

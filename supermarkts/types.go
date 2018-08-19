@@ -5,7 +5,9 @@ import "fmt"
 type SIUnit int
 
 const (
-	Liters SIUnit = iota
+	Unknown SIUnit = iota
+
+	Liters
 	Kilograms
 
 	Unit
@@ -28,6 +30,10 @@ type Product struct {
 }
 
 func (p Product) String() string {
+	if p.PriceInfo.Unit == Unknown {
+		return fmt.Sprintf("[%s] %s (%v)", p.ID, p.Name, p.PriceInfo.Price)
+	}
+
 	var unit string
 	switch p.PriceInfo.Unit {
 	case Liters:
