@@ -99,7 +99,7 @@ func (Jumbo) getPage(n int) ([]supermarkts.Product, error) {
 			Brand:    brand,
 			Category: m["category"].(string),
 			PriceInfo: supermarkts.PriceInfo{
-				Cents:        cents,
+				Price:        float32(cents) / 100,
 				Unit:         unit,
 				PricePerUnit: price,
 			},
@@ -128,5 +128,9 @@ func (j Jumbo) Products(limit int) ([]supermarkts.Product, error) {
 		}
 	}
 
-	return res[:limit], nil
+	if len(res) >= limit {
+		res = res[:limit]
+	}
+
+	return res, nil
 }

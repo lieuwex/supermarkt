@@ -1,13 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	_ "supermarkt/jumbo"
 	"supermarkt/supermarkts"
 )
 
 func main() {
-	items, err := supermarkts.Products(100)
+	items, err := supermarkts.ProductsBySupermarket("jumbo", 1000)
 	if err != nil {
 		panic(err)
 	}
