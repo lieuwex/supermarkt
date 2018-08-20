@@ -3,14 +3,16 @@ package supermarktaanbiedingen
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
 	"supermarkt/supermarkts"
 
 	"github.com/Jeffail/tunny"
-	"github.com/gocolly/colly"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/namsral/microdata"
+	"golang.org/x/net/html"
 )
 
 type Offer struct {
@@ -48,8 +50,6 @@ func (p Product) GetOffer(id string) (Offer, bool) {
 }
 
 func getProduct(url string) (Product, error) {
-	log.Printf("handling %s", url)
-
 	data, err := microdata.ParseURL(url)
 	if err != nil {
 		return Product{}, err
@@ -98,34 +98,45 @@ type workerRes struct {
 }
 
 func handleResultsPage(n int) ([]Product, bool, error) {
-	// collect product urls
-
-	c := colly.NewCollector()
-	var urls []string
-	any := false
-	c.OnHTML(".price, .card_prijs-oud", func(e *colly.HTMLElement) {
-		any = true
-		if e.DOM.HasClass("card_prijs-oud") {
-			return
-		}
-
-		a := e.DOM.ParentsFiltered("a")
-		slug, ok := a.Attr("href")
-		if !ok {
-			return
-		}
-
-		url := "http://" + path.Join("www.supermarktaanbiedingen.com/", slug)
-		urls = append(urls, url)
-	})
+	// download search page
 
 	url := fmt.Sprintf(
 		"http://www.supermarktaanbiedingen.com/zoeken/%%20/pagina/%d",
 		n,
 	)
-	log.Printf("visiting %s", url)
-	if err := c.Visit(url); err != nil {
+	res, err := http.Get(url)
+	if err != nil {
 		return []Product{}, false, err
+	}
+	defer res.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return []Product{}, false, err
+	}
+
+	// collect product urls
+
+	nodes := doc.Find(".price, .card_prijs-oud").Nodes
+	any := len(nodes) > 0
+	var urls []string
+	for _, node := range nodes {
+		s := goquery.Selection{
+			Nodes: []*html.Node{node},
+		}
+
+		if s.HasClass("card_prijs-oud") {
+			continue
+		}
+
+		a := s.ParentsFiltered("a")
+		slug, ok := a.Attr("href")
+		if !ok {
+			continue
+		}
+
+		url := "http://" + path.Join("www.supermarktaanbiedingen.com/", slug)
+		urls = append(urls, url)
 	}
 
 	// scrape product pages
@@ -155,10 +166,11 @@ var cache = make(map[int][]Product)
 func getPage(i int) ([]Product, bool, error) {
 	products, has := cache[i]
 	if has {
-		log.Printf("%d cache hit", i)
+		log.Printf("%d: cache hit", i)
 		return products, true, nil
 	}
 
+	log.Printf("%d: fetching", i)
 	prods, contains, err := handleResultsPage(i)
 	if contains && err == nil {
 		cache[i] = prods
