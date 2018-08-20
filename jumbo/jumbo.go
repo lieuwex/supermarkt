@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"supermarkt/supermarkts"
+	"supermarkt/utils"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
@@ -100,11 +101,17 @@ func getPage(n int) ([]supermarkts.Product, error) {
 		siPrice := s.Find(".jum-comparative-price").Text()
 		pricePerUnit, unit, ok := parseSIPrice(siPrice)
 
+		categories := strings.Split(m["category"].(string), ",")
+		for i, category := range categories {
+			trimmed := strings.TrimSpace(category)
+			categories[i] = strings.ToLower(trimmed)
+		}
+
 		product := supermarkts.Product{
-			ID:       id,
-			Name:     m["name"].(string),
-			Brand:    brand,
-			Category: m["category"].(string),
+			ID:         id,
+			Name:       m["name"].(string),
+			Brand:      brand,
+			Categories: utils.UniqStrings(categories),
 			PriceInfo: supermarkts.PriceInfo{
 				Price:        float32(cents) / 100,
 				Unit:         unit,

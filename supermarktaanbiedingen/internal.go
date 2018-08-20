@@ -194,10 +194,10 @@ func getProducts(id string, limit int) ([]supermarkts.Product, error) {
 			}
 
 			res = append(res, supermarkts.Product{
-				ID:       "", // TODO
-				Name:     p.Name,
-				Brand:    p.Brand,
-				Category: "", // TODO
+				ID:         "", // TODO
+				Name:       p.Name,
+				Brand:      p.Brand,
+				Categories: []string{}, // TODO
 				PriceInfo: supermarkts.PriceInfo{
 					Price: offer.Price,
 				},

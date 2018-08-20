@@ -21,10 +21,10 @@ type PriceInfo struct {
 }
 
 type Product struct {
-	ID       string
-	Name     string
-	Brand    string
-	Category string
+	ID         string
+	Name       string
+	Brand      string
+	Categories []string
 
 	PriceInfo PriceInfo
 }
