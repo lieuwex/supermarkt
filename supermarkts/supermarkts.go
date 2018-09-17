@@ -21,7 +21,7 @@ func getDriver(id string) Supermarket {
 func ProductsBySupermarket(id string, limit int) ([]Product, error) {
 	driver := getDriver(id)
 	if driver == nil {
-		return []Product{}, fmt.Errorf("driver with ID %s not found", driver.ID())
+		return []Product{}, fmt.Errorf("driver with ID %s not found", id)
 	}
 
 	return driver.Products(limit)
