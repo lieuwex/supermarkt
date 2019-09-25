@@ -2,44 +2,18 @@ package supermarktaanbiedingen
 
 import "supermarkt/supermarkts"
 
-type AlbertHeijn struct{}
+type SupermarktAanbiedingen struct{}
 
-func (AlbertHeijn) Products(limit int) ([]supermarkts.Product, error) {
-	return getProducts("ah", limit)
+func (SupermarktAanbiedingen) Products(limit int) ([]supermarkts.Product, error) {
+	return getProducts(limit)
 }
-func (AlbertHeijn) ID() string {
-	return "ah"
+func (SupermarktAanbiedingen) ID() string {
+	return "supermarktaanbiedingen"
 }
-func (AlbertHeijn) Name() string {
-	return "Albert Heijn"
-}
-
-type Dirk struct{}
-
-func (Dirk) Products(limit int) ([]supermarkts.Product, error) {
-	return getProducts("dirk", limit)
-}
-func (Dirk) ID() string {
-	return "dirk"
-}
-func (Dirk) Name() string {
-	return "Dirk"
-}
-
-type Hoogvliet struct{}
-
-func (Hoogvliet) Products(limit int) ([]supermarkts.Product, error) {
-	return getProducts("hoog", limit)
-}
-func (Hoogvliet) ID() string {
-	return "hoog"
-}
-func (Hoogvliet) Name() string {
-	return "Hoogvliet"
+func (SupermarktAanbiedingen) Name() string {
+	return "Supermarkt aanbiedingen"
 }
 
 func init() {
-	supermarkts.Register(&AlbertHeijn{})
-	supermarkts.Register(&Dirk{})
-	supermarkts.Register(&Hoogvliet{})
+	supermarkts.Register(&SupermarktAanbiedingen{})
 }

@@ -1,28 +1,28 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	_ "supermarkt/jumbo"
 	_ "supermarkt/supermarktaanbiedingen"
 	"supermarkt/supermarkts"
+	"time"
 )
 
 func main() {
-	items, err := supermarkts.ProductsBySupermarket("ah", 10)
+	http.DefaultClient.Timeout = time.Hour
+
+	m, err := supermarkts.Products(50000)
 	if err != nil {
 		panic(err)
-	}
-	for _, item := range items {
-		fmt.Print("ah ")
-		fmt.Println(item)
 	}
 
-	items, err = supermarkts.ProductsBySupermarket("dirk", 10)
+	bytes, err := json.Marshal(m)
 	if err != nil {
 		panic(err)
 	}
-	for _, item := range items {
-		fmt.Print("dirk ")
-		fmt.Println(item)
+	if err := ioutil.WriteFile("./output.json", bytes, 0644); err != nil {
+		panic(err)
 	}
 }

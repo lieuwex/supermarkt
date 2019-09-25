@@ -2,7 +2,6 @@ package supermarktaanbiedingen
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -26,27 +25,25 @@ type Product struct {
 	Offers []Offer
 }
 
-func (p Product) GetOffer(id string) (Offer, bool) {
-	var query string
-
-	switch id {
-	case "ah":
-		query = "Albert Heijn"
-	case "dirk":
-		query = "Dirk"
-	case "hoog":
-		query = "Hoogvliet"
-
-	default:
-		return Offer{}, false
-	}
-
-	for _, offer := range p.Offers {
-		if offer.Supermarket == query {
-			return offer, true
-		}
-	}
-	return Offer{}, false
+func supermarketToID(name string) string {
+	return map[string]string{
+		"Albert Heijn XL": "ah",
+		"Albert Heijn":    "ah",
+		"Boni":            "boni",
+		"Coop":            "coop",
+		"Deen":            "deen",
+		"Dekamarkt":       "deka",
+		"Dirk":            "dirk",
+		"EMTE":            "emte",
+		"Hoogvliet":       "hoog",
+		"Jan Linders":     "jan",
+		"Lidl":            "lidl",
+		"Nettorama":       "nett",
+		"Plus":            "plus",
+		"Poiesz":          "poiesz",
+		"Spar":            "spar",
+		"Vomar":           "vomar",
+	}[name]
 }
 
 func getProduct(url string) (Product, error) {
@@ -161,47 +158,32 @@ func handleResultsPage(n int) ([]Product, bool, error) {
 	return products, any, nil
 }
 
-var cache = make(map[int][]Product)
-
-func getPage(i int) ([]Product, bool, error) {
-	products, has := cache[i]
-	if has {
-		log.Printf("%d: cache hit", i)
-		return products, true, nil
-	}
-
-	log.Printf("%d: fetching", i)
-	prods, contains, err := handleResultsPage(i)
-	if contains && err == nil {
-		cache[i] = prods
-	}
-	return prods, contains, err
-}
-
-func getProducts(id string, limit int) ([]supermarkts.Product, error) {
+func getProducts(limit int) ([]supermarkts.Product, error) {
 	var res []supermarkts.Product
 
 	for i := 1; ; i++ {
-		prods, contains, err := getPage(i)
+		prods, contains, err := handleResultsPage(i)
 		if err != nil {
 			panic(err)
 		}
 
 		for _, p := range prods {
-			offer, has := p.GetOffer(id)
-			if !has {
-				continue
+			for _, offer := range p.Offers {
+				p := supermarkts.Product{
+					ID:         "", // TODO
+					Name:       p.Name,
+					Brand:      p.Brand,
+					Categories: []string{}, // TODO
+					Supermarket: supermarkts.Supermarket{
+						ID:   supermarketToID(offer.Supermarket),
+						Name: offer.Supermarket,
+					},
+					PriceInfo: supermarkts.PriceInfo{
+						Price: offer.Price,
+					},
+				}
+				res = append(res, p)
 			}
-
-			res = append(res, supermarkts.Product{
-				ID:         "", // TODO
-				Name:       p.Name,
-				Brand:      p.Brand,
-				Categories: []string{}, // TODO
-				PriceInfo: supermarkts.PriceInfo{
-					Price: offer.Price,
-				},
-			})
 		}
 
 		if !contains || len(res) >= limit {

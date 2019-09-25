@@ -108,8 +108,12 @@ func getPage(n int) ([]supermarkts.Product, error) {
 		}
 
 		product := supermarkts.Product{
-			ID:         id,
-			Name:       m["name"].(string),
+			ID:   id,
+			Name: m["name"].(string),
+			Supermarket: supermarkts.Supermarket{
+				ID:   "jumbo",
+				Name: "Jumbo",
+			},
 			Brand:      brand,
 			Categories: utils.UniqStrings(categories),
 			PriceInfo: supermarkts.PriceInfo{

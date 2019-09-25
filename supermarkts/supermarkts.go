@@ -2,13 +2,13 @@ package supermarkts
 
 import "fmt"
 
-var drivers []Supermarket
+var drivers []Fetcher
 
-func Register(sm Supermarket) {
-	drivers = append(drivers, sm)
+func Register(fetcher Fetcher) {
+	drivers = append(drivers, fetcher)
 }
 
-func getDriver(id string) Supermarket {
+func getDriver(id string) Fetcher {
 	for _, val := range drivers {
 		if val.ID() == id {
 			return val
@@ -18,7 +18,7 @@ func getDriver(id string) Supermarket {
 	return nil
 }
 
-func ProductsBySupermarket(id string, limit int) ([]Product, error) {
+func ProductsByDriver(id string, limit int) ([]Product, error) {
 	driver := getDriver(id)
 	if driver == nil {
 		return []Product{}, fmt.Errorf("driver with ID %s not found", id)
